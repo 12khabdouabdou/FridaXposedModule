@@ -1,4 +1,4 @@
-name: Fix & Build FridaXposedModule
+name: Build FridaXposedModule
 
 on:
   workflow_dispatch:
@@ -18,9 +18,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Fix Repositories & Dependencies (Script)
+      - name: Fix AndroidManifest and Build Files
         run: |
-          # 1. Fix root build.gradle (Add JitPack and Google, remove JCenter if flaky)
+          # 1. Remove the 'package' attribute from AndroidManifest.xml using sed
+          # This fixes the "Incorrect package... found in source AndroidManifest.xml" error
+          sed -i 's/package="com.wind.frida.xposed"//' app/src/main/AndroidManifest.xml
+
+          # 2. Create a correct root build.gradle
           cat > build.gradle <<EOF
           buildscript {
               repositories {
@@ -45,18 +49,18 @@ jobs:
           }
           EOF
 
-          # 2. Fix app/build.gradle (Update dependencies to modern equivalents)
-          # We rewrite it to ensure no broken dependencies exist
+          # 3. Create a correct app/build.gradle with the namespace defined here
           mkdir -p app
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
           }
           android {
-              namespace 'com.windysha.fridaxposedmodule'
+              // This namespace replaces the 'package' attribute we removed from Manifest
+              namespace 'com.wind.frida.xposed'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.windysha.fridaxposedmodule"
+                  applicationId "com.wind.frida.xposed"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -78,7 +82,7 @@ jobs:
           gradle-version: '8.4'
 
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
