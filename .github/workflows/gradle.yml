@@ -18,13 +18,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Fix AndroidManifest and Build Files
+      - name: Fix Manifest and Build Files
         run: |
-          # 1. Remove the 'package' attribute from AndroidManifest.xml using sed
-          # This fixes the "Incorrect package... found in source AndroidManifest.xml" error
+          # 1. Remove 'package=' attribute (Fixes namespace conflict)
           sed -i 's/package="com.wind.frida.xposed"//' app/src/main/AndroidManifest.xml
+          
+          # 2. Add 'android:exported="true"' to MainActivity (Fixes Android 12+ build error)
+          # We search for the line containing '.ui.MainActivity' and append exported=true to it
+          sed -i 's/android:name=".ui.MainActivity"/android:name=".ui.MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-          # 2. Create a correct root build.gradle
+          # 3. Create correct root build.gradle
           cat > build.gradle <<EOF
           buildscript {
               repositories {
@@ -49,14 +52,13 @@ jobs:
           }
           EOF
 
-          # 3. Create a correct app/build.gradle with the namespace defined here
+          # 4. Create correct app/build.gradle
           mkdir -p app
           cat > app/build.gradle <<EOF
           plugins {
               id 'com.android.application'
           }
           android {
-              // This namespace replaces the 'package' attribute we removed from Manifest
               namespace 'com.wind.frida.xposed'
               compileSdk 34
               defaultConfig {
