@@ -20,11 +20,10 @@ jobs:
 
       - name: Fix Manifest and Build Files
         run: |
-          # 1. Remove 'package=' attribute (Fixes namespace conflict)
+          # 1. Remove 'package=' attribute
           sed -i 's/package="com.wind.frida.xposed"//' app/src/main/AndroidManifest.xml
           
-          # 2. Add 'android:exported="true"' to MainActivity (Fixes Android 12+ build error)
-          # We search for the line containing '.ui.MainActivity' and append exported=true to it
+          # 2. Add 'android:exported="true"'
           sed -i 's/android:name=".ui.MainActivity"/android:name=".ui.MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
           # 3. Create correct root build.gradle
@@ -44,7 +43,6 @@ jobs:
                   google()
                   mavenCentral()
                   maven { url 'https://jitpack.io' }
-                  maven { url 'https://maven.repository.red/repository/public/' }
               }
           }
           task clean(type: Delete) {
@@ -53,6 +51,7 @@ jobs:
           EOF
 
           # 4. Create correct app/build.gradle
+          # We switch dependency to 'com.github.rovo89:XposedBridge' via JitPack
           mkdir -p app
           cat > app/build.gradle <<EOF
           plugins {
@@ -74,7 +73,8 @@ jobs:
               }
           }
           dependencies {
-              compileOnly 'de.robv.android.xposed:api:82'
+              // Use the official XposedBridge repo via JitPack (Commit 54f4d6a is v82)
+              compileOnly 'com.github.rovo89:XposedBridge:54f4d6a'
           }
           EOF
 
