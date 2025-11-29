@@ -1,4 +1,4 @@
-name: Build FridaXposedModule
+name: Build WindySha Frida Module
 
 on:
   workflow_dispatch:
@@ -18,19 +18,32 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Fix Project & Inject Xposed Stubs
+      - name: Download Frida Gadget
         run: |
-          # 1. Remove 'package=' from Manifest
+          # Download latest Frida Gadget for Arm64
+          wget -O frida-gadget.so.xz https://github.com/frida/frida/releases/download/16.1.4/frida-gadget-16.1.4-android-arm64.so.xz
+          xz -d frida-gadget.so.xz
+          mv frida-gadget.so libfrida-gadget.so
+          
+          # Place it in both locations to be safe (assets and jniLibs)
+          mkdir -p app/src/main/assets
+          cp libfrida-gadget.so app/src/main/assets/
+          
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp libfrida-gadget.so app/src/main/jniLibs/arm64-v8a/
+
+      - name: Fix Project Structure
+        run: |
+          # 1. Remove conflicting 'package' attribute
           sed -i 's/package="com.wind.frida.xposed"//' app/src/main/AndroidManifest.xml
           
-          # 2. Add 'exported=true' to MainActivity
+          # 2. Fix Android 12+ Exported Error
           sed -i 's/android:name=".ui.MainActivity"/android:name=".ui.MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-          # 3. Create dummy Xposed API classes so we don't need external dependencies
-          # We create a folder structure: app/src/main/java/de/robv/android/xposed
+          # 3. Inject Xposed Stubs (To avoid dependency issues)
           mkdir -p app/src/main/java/de/robv/android/xposed/callbacks
           
-          # Create IXposedHookLoadPackage.java
+          # IXposedHookLoadPackage
           cat > app/src/main/java/de/robv/android/xposed/IXposedHookLoadPackage.java <<EOF
           package de.robv.android.xposed;
           import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
@@ -39,7 +52,7 @@ jobs:
           }
           EOF
 
-          # Create XC_LoadPackage.java
+          # XC_LoadPackage
           cat > app/src/main/java/de/robv/android/xposed/callbacks/XC_LoadPackage.java <<EOF
           package de.robv.android.xposed.callbacks;
           import android.content.pm.ApplicationInfo;
@@ -54,7 +67,7 @@ jobs:
           }
           EOF
 
-          # Create XposedHelpers.java
+          # XposedHelpers
           cat > app/src/main/java/de/robv/android/xposed/XposedHelpers.java <<EOF
           package de.robv.android.xposed;
           import java.lang.reflect.Member;
@@ -67,7 +80,7 @@ jobs:
           }
           EOF
 
-          # Create XC_MethodHook.java
+          # XC_MethodHook
           cat > app/src/main/java/de/robv/android/xposed/XC_MethodHook.java <<EOF
           package de.robv.android.xposed;
           import java.lang.reflect.Member;
@@ -89,7 +102,7 @@ jobs:
           }
           EOF
 
-          # Create XposedBridge.java
+          # XposedBridge
           cat > app/src/main/java/de/robv/android/xposed/XposedBridge.java <<EOF
           package de.robv.android.xposed;
           public final class XposedBridge {
@@ -99,34 +112,19 @@ jobs:
           }
           EOF
 
-          # 4. Create root build.gradle
+          # 4. Create build.gradle files
           cat > build.gradle <<EOF
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
+          allprojects { repositories { google(); mavenCentral() } }
+          task clean(type: Delete) { delete rootProject.buildDir }
           EOF
 
-          # 5. Create app/build.gradle (No dependencies!)
           mkdir -p app
           cat > app/build.gradle <<EOF
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace 'com.wind.frida.xposed'
               compileSdk 34
@@ -143,8 +141,7 @@ jobs:
               }
           }
           dependencies {
-              // No external dependencies needed now!
-              // We injected the Xposed classes directly into src/main/java
+             // Stubs are injected
           }
           EOF
 
@@ -159,5 +156,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FridaXposedModule-Debug
+          name: FridaXposedModule-WindySha
           path: app/build/outputs/apk/debug/*.apk
